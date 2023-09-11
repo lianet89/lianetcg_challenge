@@ -1,7 +1,7 @@
 package com.example.LianetCG_challenge.service;
 
-public class SourceA {
+public class SinkAService {
 	
-	//EMITE registros JSON
+	//ACEPTA registros JSON
 
 }
