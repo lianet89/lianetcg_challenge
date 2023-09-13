@@ -7,7 +7,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 public class TestLianetCgChallengeApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.from(LianetCgChallengeApplication::main).with(TestLianetCgChallengeApplication.class).run(args);
+		SpringApplication.from(ChallengeApplication::main).with(TestLianetCgChallengeApplication.class).run(args);
 	}
 
 }

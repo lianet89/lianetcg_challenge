@@ -1,4 +1,4 @@
-package com.example.LianetCG_challenge.model;
+package com.example.LianetCG_challenge.dto;
 
 import com.example.LianetCG_challenge.config.Status;
 
@@ -6,12 +6,12 @@ import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "msg")
-public class SourceBRecord {
+public class SourceBRecordDto {
 
 	private String id;
 	private String done;
 	
-	public SourceBRecord(String id, String done) {
+	public SourceBRecordDto(String id, String done) {
 		this.id = id;
 		this.done = done;
 	}

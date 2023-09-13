@@ -5,10 +5,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 
 @SpringBootApplication
-public class LianetCgChallengeApplication {
+public class ChallengeApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(LianetCgChallengeApplication.class, args);
+		SpringApplication.run(ChallengeApplication.class, args);
 	}
 	
 	
