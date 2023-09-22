@@ -2,6 +2,7 @@ package com.example.LianetCG_challenge.service;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import javax.xml.stream.XMLStreamReader;
@@ -30,16 +31,17 @@ public class ChallengeService {
 
 	List<JsonNode> listA = new ArrayList<JsonNode>();
 	List<JsonNode> listB = new ArrayList<JsonNode>();
+	List<JsonNode> listAux = new ArrayList<JsonNode>();
 
-	public JsonNode getResourceARecord() {
+	public JsonNode getResourceARecord() throws Exception {
 		log.info("Fetching record from source A");
 		String resourceAUrl = "http://localhost:7299/source/a";
 		RestTemplate restTemplate = new RestTemplate();
-		
-		ResponseEntity<JsonNode> response = restTemplate.getForEntity(resourceAUrl, JsonNode.class);
+						
+		ResponseEntity<JsonNode> response = restTemplate.getForEntity(resourceAUrl, JsonNode.class);		 
 		log.info(response.toString());
 		JsonNode node = response.getBody();		
-		return node;	
+		return node;
 	}
 
 	public JsonNode getResourceBRecord() throws IOException {
@@ -56,7 +58,7 @@ public class ChallengeService {
 	}
 
 	public String postSinkA(Kind kind, JsonNode id) {
-		log.info("Sending record to sink A");
+		log.info("Sending record to sink A: " + id);
 		String sinkAUrl = "http://localhost:7299/sink/a";
 		RestTemplate restTemplate = new RestTemplate();
 		
@@ -66,71 +68,61 @@ public class ChallengeService {
 	}
 
 	
-	  public String categorize() throws IOException {  
+	  public void categorize() throws Exception {  
 		  log.info("Categorizing records");
 		  boolean found = false; 
 		  String responseStatus = "";
-		  		  
-		  JsonNode sourceARecord = getResourceARecord();
-		  JsonNode idRecordA = sourceARecord.path("id");	
-		  log.info(idRecordA.asText());
 		  
-		  JsonNode sourceBRecord = getResourceBRecord();
-		  JsonNode idRecordB = sourceBRecord.path("id").path("value");
-		  log.info(idRecordB.asText());
-		  			  
-			/*
-			 * Si sourceARecord y sourceBRecord tienen el mismo ID son iguales, entonces se
-			 * envia a SinkA con tipo JOINED
-			 */
-			  if(idRecordA.equals(idRecordB)) { 				  
+		  try {
+			  JsonNode sourceARecord = getResourceARecord();			  
+			  JsonNode idRecordA = sourceARecord.path("id");			  
+			  log.info(idRecordA.asText());
+			  
+			  JsonNode sourceBRecord = getResourceBRecord();
+			  JsonNode idRecordB = sourceBRecord.path("id").path("value");
+			  log.info(idRecordB.asText());
+			  
+			  if(idRecordA.equals(idRecordB)) { 
 				  responseStatus = postSinkA(Kind.JOINED, idRecordA); 
 				  log.info("Category: " + Kind.JOINED.toString());
-			  }			  
-			  /*Si sourceARecord y sourceBRecord no tienen el mismo ID son diferentes,
-			  entonces busca el sourceARecord en la listaB. Si encuentra uno con el mismo
-			  ID, entonces se envian a SinkA con tipo JOINED y se elimina de la listaB*/
-			  
+			  } 				  
+				  
 			  if(!idRecordA.equals(idRecordB)) { 
-				  for(int i = 0; i < listB.size(); i++) { 
-					  if(idRecordA.equals(listB.get(i).path("id").path("value"))) {		
-						  responseStatus = postSinkA (Kind.JOINED, idRecordA);
-						  log.info("Category: " + Kind.JOINED.toString());
-						  found = true; 						  
-						  listB.remove(i);			
-						  break; 
-					  } 
-				  }			  
-			  /*Si no encontro un record igual en la listaB, entonces busca el sourceBRecord
-			  en la listaA. Si encuentra uno con el mismo ID, entonces se envian a SinkA
-			  con tipo JOINED y se elimina de la listaA*/
-			  
-				  if(found == false) { 
-					  listA.add(sourceARecord); 
-					  for(int i = 0; i < listA.size(); i++) { 
-						  if(idRecordB.equals(listA.get(i).path("id"))) {
-							  responseStatus = postSinkA (Kind.JOINED, idRecordB); 
-							  log.info("Category: " +  Kind.JOINED.toString());
-							  found = true;
-							  listA.remove(i); 
-							  break; 
-						  } 
-					  }
-				  
-				  /*Si tampoco encontro un record igual en la listaA, entonces se envian a SinkA
-				  con tipo ORPHANED y se elimina de la listaA*/
-				  
-					  if(found == false) { 
-						  responseStatus = postSinkA (Kind.ORPHANED, idRecordB);
-						  log.info("Category: " + Kind.ORPHANED.toString());
-						  listB.remove(sourceBRecord); 
-					  }			  
+				  if(listAux.contains(idRecordA)) {
+					  responseStatus = postSinkA (Kind.JOINED, idRecordA);
+					  log.info("Category: " + Kind.JOINED.toString());
+					  found = true; 						  
+					  listAux.remove(idRecordA);
+				  } else {
+					  listAux.add(idRecordA);
 				  }
+				  
+				  if(listAux.contains(idRecordB)) {
+					  responseStatus = postSinkA (Kind.JOINED, idRecordB);
+					  log.info("Category: " + Kind.JOINED.toString());
+					  found = true; 						  
+					  listAux.remove(idRecordB);
+				  } else {
+					  listAux.add(idRecordB);
+				  } 
+							  
+				  log.info("Auxiliar list: " + listAux.toString()); 
+			  }
 			  
-			  } 
-			  /*TODO: Verificar cuando un registro es DEFECTIVE e implementar el
-			  comportamiento para ese caso*/
-			 return responseStatus;
+		  }catch (Exception e) {
+			  System.out.println("Incorrect format for record (DEFECTIVE).");
+		  }
+	  }
+	  
+	  public void sendOrphanedToSink() {
+		  log.info("Sending ORPHANED records to sinkA: ");
+		  String responseStatus = "";
+			
+		  for (JsonNode jsonNode : listAux) {
+			  responseStatus = postSinkA (Kind.ORPHANED, jsonNode); 
+			  log.info("Category: " + Kind.ORPHANED.toString());
+			  log.info("Response status: " + responseStatus); 
+		  }
 	  }
 	 
 
