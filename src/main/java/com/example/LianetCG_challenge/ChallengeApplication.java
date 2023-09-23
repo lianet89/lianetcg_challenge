@@ -25,10 +25,11 @@ public class ChallengeApplication implements CommandLineRunner{
 	@Override
 	public void run(String... args) throws Exception {
 		log.info("Starting system.");
-		serviceClass.categorize();
-		serviceClass.categorize();
-		serviceClass.categorize();
-		serviceClass.categorize();
+		serviceClass.processRecords(); 
+		serviceClass.processRecords();
+		serviceClass.processRecords(); 
+		serviceClass.processRecords();
+		
 		serviceClass.sendOrphanedToSink();
 	}
 

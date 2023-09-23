@@ -19,6 +19,7 @@ import com.example.LianetCG_challenge.config.Kind;
 import com.example.LianetCG_challenge.dto.SinkADto;
 import com.example.LianetCG_challenge.dto.SourceARecordDto;
 import com.example.LianetCG_challenge.dto.SourceBRecordDto;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
@@ -29,8 +30,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class ChallengeService {
 
-	List<JsonNode> listA = new ArrayList<JsonNode>();
-	List<JsonNode> listB = new ArrayList<JsonNode>();
 	List<JsonNode> listAux = new ArrayList<JsonNode>();
 
 	public JsonNode getResourceARecord() throws Exception {
@@ -57,64 +56,39 @@ public class ChallengeService {
 		return node;
 	}
 
-	public String postSinkA(Kind kind, JsonNode id) {
+	public String postSinkA(Kind kind, JsonNode id) throws JsonProcessingException {
 		log.info("Sending record to sink A: " + id);
 		String sinkAUrl = "http://localhost:7299/sink/a";
-		RestTemplate restTemplate = new RestTemplate();
+				
+		ObjectMapper objectMapper = new ObjectMapper();		
+		SinkADto sinkADto = new SinkADto(kind.toString(), id.toString());
+		String json = objectMapper.writeValueAsString(sinkADto);
 		
-		HttpEntity<SinkADto> request = new HttpEntity<>(new SinkADto(kind, id));		
-		ResponseEntity<SinkADto> response = restTemplate.exchange(sinkAUrl, HttpMethod.POST, request, SinkADto.class);				
+		HttpEntity<String> request = new HttpEntity<>(json);
+		
+		RestTemplate restTemplate = new RestTemplate();
+		ResponseEntity<SinkADto> response = restTemplate.exchange(sinkAUrl, HttpMethod.POST, request, SinkADto.class);	
+		
 		return response.getStatusCode().toString();
 	}
 
-	
-	  public void categorize() throws Exception {  
+	public void categorize(JsonNode id) throws Exception {
 		  log.info("Categorizing records");
-		  boolean found = false; 
-		  String responseStatus = "";
 		  
-		  try {
-			  JsonNode sourceARecord = getResourceARecord();			  
-			  JsonNode idRecordA = sourceARecord.path("id");			  
-			  log.info(idRecordA.asText());
-			  
-			  JsonNode sourceBRecord = getResourceBRecord();
-			  JsonNode idRecordB = sourceBRecord.path("id").path("value");
-			  log.info(idRecordB.asText());
-			  
-			  if(idRecordA.equals(idRecordB)) { 
-				  responseStatus = postSinkA(Kind.JOINED, idRecordA); 
-				  log.info("Category: " + Kind.JOINED.toString());
-			  } 				  
-				  
-			  if(!idRecordA.equals(idRecordB)) { 
-				  if(listAux.contains(idRecordA)) {
-					  responseStatus = postSinkA (Kind.JOINED, idRecordA);
-					  log.info("Category: " + Kind.JOINED.toString());
-					  found = true; 						  
-					  listAux.remove(idRecordA);
-				  } else {
-					  listAux.add(idRecordA);
-				  }
-				  
-				  if(listAux.contains(idRecordB)) {
-					  responseStatus = postSinkA (Kind.JOINED, idRecordB);
-					  log.info("Category: " + Kind.JOINED.toString());
-					  found = true; 						  
-					  listAux.remove(idRecordB);
-				  } else {
-					  listAux.add(idRecordB);
-				  } 
-							  
-				  log.info("Auxiliar list: " + listAux.toString()); 
-			  }
-			  
+		  try { 
+			  if(listAux.contains(id)) { 
+				  postSinkA (Kind.JOINED, id);
+				  listAux.remove(id); 
+				  log.info("Category: " + Kind.JOINED.toString()); 
+			  } else {
+				  listAux.add(id); 
+			  }  
 		  }catch (Exception e) {
-			  System.out.println("Incorrect format for record (DEFECTIVE).");
-		  }
+			  System.out.println("Invalid format for record (DEFECTIVE).");
+		  } 
 	  }
-	  
-	  public void sendOrphanedToSink() {
+	 
+	 public void sendOrphanedToSink() throws JsonProcessingException {
 		  log.info("Sending ORPHANED records to sinkA: ");
 		  String responseStatus = "";
 			
@@ -123,7 +97,18 @@ public class ChallengeService {
 			  log.info("Category: " + Kind.ORPHANED.toString());
 			  log.info("Response status: " + responseStatus); 
 		  }
-	  }
-	 
-
+	  }	  
+		
+	 	public void processRecords() throws Exception {
+		  log.info("Processing records."); 
+		  
+		  JsonNode sourceARecord = getResourceARecord(); 
+		  JsonNode idRecordA = sourceARecord.path("id");
+		  categorize(idRecordA); 
+			  		  
+		  JsonNode sourceBRecord = getResourceBRecord(); 
+		  JsonNode idRecordB = sourceBRecord.path("id").path("value"); 
+		  categorize(idRecordB);
+		  
+		}
 }
