@@ -7,15 +7,18 @@ import java.util.List;
 
 import javax.xml.stream.XMLStreamReader;
 
+import org.springframework.core.codec.DecodingException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import com.example.LianetCG_challenge.config.Kind;
+import com.example.LianetCG_challenge.config.Status;
 import com.example.LianetCG_challenge.dto.SinkADto;
 import com.example.LianetCG_challenge.dto.SourceARecordDto;
 import com.example.LianetCG_challenge.dto.SourceBRecordDto;
@@ -32,27 +35,38 @@ public class ChallengeService {
 
 	List<JsonNode> listAux = new ArrayList<JsonNode>();
 
-	public JsonNode getResourceARecord() throws Exception {
+	public JsonNode getResourceARecord() throws RestClientException {
 		log.info("Fetching record from source A");
 		String resourceAUrl = "http://localhost:7299/source/a";
 		RestTemplate restTemplate = new RestTemplate();
-						
-		ResponseEntity<JsonNode> response = restTemplate.getForEntity(resourceAUrl, JsonNode.class);		 
-		log.info(response.toString());
-		JsonNode node = response.getBody();		
+		JsonNode node = null;
+		
+		try {
+			ResponseEntity<JsonNode> response = restTemplate.getForEntity(resourceAUrl, JsonNode.class);		 
+			log.info(response.toString());
+			node = response.getBody();
+		} catch (Exception e) {
+			log.info("Found a DEFECTIVE record (ignored)");
+		}
 		return node;
 	}
 
-	public JsonNode getResourceBRecord() throws IOException {
+	public JsonNode getResourceBRecord() throws RestClientException {
 		log.info("Fetching record from source B");
 		String resourceBUrl = "http://localhost:7299/source/b";
 		RestTemplate restTemplate = new RestTemplate();
-	
-		ResponseEntity<String> response = restTemplate.getForEntity(resourceBUrl, String.class);
-		log.info(response.toString());
+		JsonNode node = null;
 		
-		XmlMapper xmlMapper = new XmlMapper();
-		JsonNode node = xmlMapper.readTree(response.getBody());				
+		try {
+			ResponseEntity<String> response = restTemplate.getForEntity(resourceBUrl, String.class);
+			log.info(response.toString());
+			
+			XmlMapper xmlMapper = new XmlMapper();
+			node = xmlMapper.readTree(response.getBody());
+			
+		} catch (Exception e) {
+			log.info("Found a DEFECTIVE record (ignored)");
+		}						
 		return node;
 	}
 
@@ -74,18 +88,14 @@ public class ChallengeService {
 
 	public void categorize(JsonNode id) throws Exception {
 		  log.info("Categorizing records");
-		  
-		  try { 
+		  	   
 			  if(listAux.contains(id)) { 
 				  postSinkA (Kind.JOINED, id);
 				  listAux.remove(id); 
 				  log.info("Category: " + Kind.JOINED.toString()); 
-			  } else {
+			  } else { 
 				  listAux.add(id); 
-			  }  
-		  }catch (Exception e) {
-			  System.out.println("Invalid format for record (DEFECTIVE).");
-		  } 
+			  }
 	  }
 	 
 	 public void sendOrphanedToSink() throws JsonProcessingException {
@@ -99,16 +109,57 @@ public class ChallengeService {
 		  }
 	  }	  
 		
-	 	public void processRecords() throws Exception {
-		  log.info("Processing records."); 
+	 	public void processRecordsA () throws Exception {
+		  log.info("Processing SourceA 's records."); 
+		  boolean statusDone = false;
+		  //JsonNode statusRecordA = null;
 		  
-		  JsonNode sourceARecord = getResourceARecord(); 
-		  JsonNode idRecordA = sourceARecord.path("id");
-		  categorize(idRecordA); 
-			  		  
-		  JsonNode sourceBRecord = getResourceBRecord(); 
-		  JsonNode idRecordB = sourceBRecord.path("id").path("value"); 
-		  categorize(idRecordB);
+		  try {
+			  do {
+				  JsonNode sourceARecord = getResourceARecord();				  
+				  if (!sourceARecord.isNull()) {
+					  JsonNode idRecordA = sourceARecord.path("id");
+					  JsonNode statusRecordA = sourceARecord.path("status");					  				  
+					  if (!statusRecordA.asText().equalsIgnoreCase(Status.DONE.toString())) {
+						  categorize(idRecordA);					  				
+					  } else {
+						  statusDone = true;
+						  log.info("FINAL record from source A."); 
+					  }
+				  } 
+			  } while (!statusDone);
+			  
+		  } catch (Exception e) {
+			  //log.info(e.getMessage());
+		  }
 		  
-		}
+		  		 
+	}
+	 	
+	 	public void processRecordsB () throws Exception {
+			log.info("Processing records."); 
+			boolean statusDone = false;
+			
+			try {
+				do {
+					  JsonNode sourceBRecord = getResourceBRecord(); 
+					  if (!sourceBRecord.isNull()) {
+						  JsonNode idRecordB = sourceBRecord.path("id").path("value"); 
+						  JsonNode statusRecordB = sourceBRecord.path("done");
+						  
+						  if (!statusRecordB.asText().equalsIgnoreCase(Status.DONE.toString())) {
+							  categorize(idRecordB);				
+						  } else {
+							  statusDone = true;
+							  log.info("FINAL record from source B."); 
+						  }
+						  
+					  }					  
+				  } while (!statusDone);
+			} catch (Exception e) {
+				//log.info(e.getMessage());
+			}
+				
+				 
+	 	}
 }
